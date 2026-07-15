@@ -6,12 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "seed:demo": "node scripts/create-demo-accounts.js",
+    "seed": "npx --yes tsx src/lib/seed.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "html5-qrcode": "^2.3.6",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.468.0",
@@ -28,7 +31,6 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@next/swc-win32-x64-msvc": "^15.5.19",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.10.0",
     "@types/nodemailer": "^6.4.17",

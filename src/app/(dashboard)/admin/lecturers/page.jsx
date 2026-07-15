@@ -49,7 +49,7 @@ export default function LecturersPage() {
     fetch('/api/departments?limit=100')
       .then(r => r.json())
       .then(d => d.data && setDepartments(d.data))
-      .catch(() => {});
+      .catch(() => { });
   }, [fetchLecturers]);
 
   function openCreate() {
@@ -109,10 +109,10 @@ export default function LecturersPage() {
   }
 
   const columns = [
-    { key: 'userId', label: 'Name', render: (val) => val?.name || 'N/A' },
+    { key: 'name', label: 'Name', render: (_, row) => row.userId?.name || 'N/A' },
     { key: 'staffId', label: 'Staff ID', render: (val) => <span className="font-mono text-xs">{val}</span> },
-    { key: 'userId', label: 'Email', render: (val) => val?.email || 'N/A' },
-    { key: 'departmentId', label: 'Department', render: (val) => val?.name || 'N/A' },
+    { key: 'email', label: 'Email', render: (_, row) => row.userId?.email || 'N/A' },
+    { key: 'department', label: 'Department', render: (_, row) => row.departmentId?.name || 'N/A' },
     { key: 'title', label: 'Title', render: (val) => <Badge variant="info">{val}</Badge> },
     {
       key: '_id', label: 'Actions',

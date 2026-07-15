@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import StatCard from '@/components/dashboard/StatCard';
 import Card, { CardHeader, CardBody } from '@/components/ui/Card';
+import Input from '@/components/ui/Input';
+import Modal from '@/components/ui/Modal';
 import Badge from '@/components/ui/Badge';
 import { BookOpen, ClipboardCheck, AlertTriangle, Users } from 'lucide-react';
 
@@ -13,10 +16,14 @@ export default function LecturerDashboard() {
   const router = useRouter();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({ name: '', email: '', password: '', staffId: '', title: '' });
+  const [savingProfile, setSavingProfile] = useState(false);
 
   useEffect(() => {
     if (!isLecturer) { router.replace('/login'); return; }
     fetchDashboard();
+    fetchProfile();
   }, [isLecturer, router]);
 
   async function fetchDashboard() {
@@ -28,6 +35,72 @@ export default function LecturerDashboard() {
       console.error('Failed to fetch dashboard:', error);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchProfile() {
+    try {
+      const res = await fetch('/api/profile');
+      const result = await res.json();
+      if (res.ok) {
+        const profile = result.data.profile || {};
+        setProfileForm({
+          name: result.data.user.name || '',
+          email: result.data.user.email || '',
+          password: '',
+          staffId: profile.staffId || '',
+          title: profile.title || '',
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load profile:', error);
+    }
+  }
+
+  async function openProfile() {
+    try {
+      const res = await fetch('/api/profile');
+      const result = await res.json();
+      if (res.ok) {
+        const profile = result.data.profile || {};
+        setProfileForm({
+          name: result.data.user.name || '',
+          email: result.data.user.email || '',
+          password: '',
+          staffId: profile.staffId || '',
+          title: profile.title || '',
+        });
+        setProfileOpen(true);
+      } else {
+        toast.error(result.error || 'Failed to load profile');
+      }
+    } catch (error) {
+      console.error('Failed to load profile:', error);
+      toast.error('Failed to load profile');
+    }
+  }
+
+  async function saveProfile() {
+    setSavingProfile(true);
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profileForm),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        toast.success('Profile updated');
+        setProfileOpen(false);
+        fetchDashboard();
+      } else {
+        toast.error(result.error || 'Failed to update profile');
+      }
+    } catch (error) {
+      console.error('Profile save failed:', error);
+      toast.error('Failed to update profile');
+    } finally {
+      setSavingProfile(false);
     }
   }
 
@@ -58,6 +131,94 @@ export default function LecturerDashboard() {
         <StatCard title="Attendance Today" value={data?.attendanceToday || 0} icon={ClipboardCheck} color="green" />
         <StatCard title="Poor Attendance Students" value={data?.poorAttendanceStudents?.length || 0} icon={AlertTriangle} color="red" />
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Profile</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Edit your lecturer profile details.</p>
+          </div>
+          <button
+            type="button"
+            onClick={openProfile}
+            className="inline-flex items-center justify-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 transition-colors"
+          >
+            Edit Profile
+          </button>
+        </CardHeader>
+        <CardBody>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Name</p>
+              <p className="text-sm font-medium text-slate-900 dark:text-white">{profileForm.name || 'Not loaded'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Email</p>
+              <p className="text-sm font-medium text-slate-900 dark:text-white">{profileForm.email || 'Not loaded'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Staff ID</p>
+              <p className="text-sm font-medium text-slate-900 dark:text-white">{profileForm.staffId || 'Not set'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Title</p>
+              <p className="text-sm font-medium text-slate-900 dark:text-white">{profileForm.title || 'Not set'}</p>
+            </div>
+          </div>
+        </CardBody>
+      </Card>
+
+      <Modal isOpen={profileOpen} onClose={() => setProfileOpen(false)} title="Edit Profile" size="md">
+        <div className="space-y-4">
+          <Input
+            label="Name"
+            value={profileForm.name}
+            onChange={(e) => setProfileForm((prev) => ({ ...prev, name: e.target.value }))}
+            required
+          />
+          <Input
+            label="Email"
+            type="email"
+            value={profileForm.email}
+            onChange={(e) => setProfileForm((prev) => ({ ...prev, email: e.target.value }))}
+            required
+          />
+          <Input
+            label="Password"
+            type="password"
+            value={profileForm.password}
+            onChange={(e) => setProfileForm((prev) => ({ ...prev, password: e.target.value }))}
+            placeholder="Leave blank to keep current password"
+          />
+          <Input
+            label="Staff ID"
+            value={profileForm.staffId}
+            onChange={(e) => setProfileForm((prev) => ({ ...prev, staffId: e.target.value }))}
+          />
+          <Input
+            label="Title"
+            value={profileForm.title}
+            onChange={(e) => setProfileForm((prev) => ({ ...prev, title: e.target.value }))}
+          />
+          <div className="flex justify-end gap-3 pt-4">
+            <button
+              type="button"
+              onClick={() => setProfileOpen(false)}
+              className="rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={saveProfile}
+              disabled={savingProfile}
+              className="inline-flex items-center justify-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 transition-colors disabled:opacity-50"
+            >
+              {savingProfile ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       <Card>
         <CardHeader>

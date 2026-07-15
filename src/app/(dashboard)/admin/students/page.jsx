@@ -8,9 +8,11 @@ import Input, { Select } from '@/components/ui/Input';
 import Table from '@/components/ui/Table';
 import Modal from '@/components/ui/Modal';
 import Badge from '@/components/ui/Badge';
+import { useAuth } from '@/contexts/AuthContext';
 import { Plus, Search, Edit2, Trash2, Users } from 'lucide-react';
 
 export default function StudentsPage() {
+  const { isAdmin } = useAuth();
   const [students, setStudents] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -44,7 +46,7 @@ export default function StudentsPage() {
     fetch('/api/departments?limit=100')
       .then(r => r.json())
       .then(d => d.data && setDepartments(d.data))
-      .catch(() => {});
+      .catch(() => { });
   }, [fetchStudents]);
 
   function openCreate() {
@@ -111,9 +113,9 @@ export default function StudentsPage() {
 
   const columns = [
     {
-      key: 'userId',
+      key: 'name',
       label: 'Name',
-      render: (val) => val?.name || 'N/A',
+      render: (_, row) => row.userId?.name || 'N/A',
     },
     {
       key: 'matricNumber',
@@ -121,14 +123,14 @@ export default function StudentsPage() {
       render: (val) => <span className="font-mono text-xs">{val}</span>,
     },
     {
-      key: 'userId',
+      key: 'email',
       label: 'Email',
-      render: (val) => val?.email || 'N/A',
+      render: (_, row) => row.userId?.email || 'N/A',
     },
     {
-      key: 'departmentId',
+      key: 'department',
       label: 'Department',
-      render: (val) => val?.name || val?.code || 'N/A',
+      render: (_, row) => row.departmentId?.name || row.departmentId?.code || 'N/A',
     },
     {
       key: 'level',
@@ -140,12 +142,18 @@ export default function StudentsPage() {
       label: 'Actions',
       render: (_, row) => (
         <div className="flex items-center gap-2">
-          <button onClick={() => openEdit(row)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-            <Edit2 className="h-4 w-4 text-primary-600" />
-          </button>
-          <button onClick={() => handleDelete(row._id)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-            <Trash2 className="h-4 w-4 text-red-500" />
-          </button>
+          {isAdmin ? (
+            <>
+              <button onClick={() => openEdit(row)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                <Edit2 className="h-4 w-4 text-primary-600" />
+              </button>
+              <button onClick={() => handleDelete(row._id)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                <Trash2 className="h-4 w-4 text-red-500" />
+              </button>
+            </>
+          ) : (
+            <span className="text-xs text-slate-500 dark:text-slate-400">Admin only</span>
+          )}
         </div>
       ),
     },
@@ -158,7 +166,7 @@ export default function StudentsPage() {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Students</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage student records</p>
         </div>
-        <Button onClick={openCreate} icon={Plus}>Add Student</Button>
+        {isAdmin && <Button onClick={openCreate} icon={Plus}>Add Student</Button>}
       </div>
 
       <Card>
@@ -194,7 +202,7 @@ export default function StudentsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Matric Number" value={form.matricNumber} onChange={(e) => setForm(prev => ({ ...prev, matricNumber: e.target.value }))} placeholder="e.g. CSC/21/0001" required />
             <Select label="Level" value={form.level} onChange={(e) => setForm(prev => ({ ...prev, level: e.target.value }))}
-              options={['100','200','300','400','500','600'].map(l => ({ value: l, label: `${l} Level` }))} required />
+              options={['100', '200', '300', '400', '500', '600'].map(l => ({ value: l, label: `${l} Level` }))} required />
           </div>
           <Select label="Department" value={form.departmentId} onChange={(e) => setForm(prev => ({ ...prev, departmentId: e.target.value }))}
             placeholder="Select department" options={departments.map(d => ({ value: d._id, label: `${d.code} - ${d.name}` }))} required />

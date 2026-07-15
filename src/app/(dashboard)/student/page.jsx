@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import StatCard from '@/components/dashboard/StatCard';
 import Card, { CardHeader, CardBody } from '@/components/ui/Card';
+import Input, { Select } from '@/components/ui/Input';
+import Modal from '@/components/ui/Modal';
 import Badge from '@/components/ui/Badge';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { ClipboardCheck, BookOpen, AlertTriangle, CheckCircle } from 'lucide-react';
@@ -14,6 +17,9 @@ export default function StudentDashboard() {
   const router = useRouter();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({ name: '', email: '', password: '', matricNumber: '', level: '', departmentId: '' });
+  const [savingProfile, setSavingProfile] = useState(false);
 
   useEffect(() => {
     if (!isStudent) { router.replace('/login'); return; }
@@ -29,6 +35,54 @@ export default function StudentDashboard() {
       console.error('Failed to fetch dashboard:', error);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function openProfile() {
+    try {
+      const res = await fetch('/api/profile');
+      const result = await res.json();
+      if (res.ok) {
+        const profile = result.data.profile || {};
+        setProfileForm({
+          name: result.data.user.name || '',
+          email: result.data.user.email || '',
+          password: '',
+          matricNumber: profile.matricNumber || '',
+          level: profile.level || '',
+          departmentId: profile.departmentId?._id || '',
+        });
+        setProfileOpen(true);
+      } else {
+        toast.error(result.error || 'Failed to load profile');
+      }
+    } catch (error) {
+      console.error('Failed to load profile:', error);
+      toast.error('Failed to load profile');
+    }
+  }
+
+  async function saveProfile() {
+    setSavingProfile(true);
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profileForm),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        toast.success('Profile updated');
+        setProfileOpen(false);
+        fetchDashboard();
+      } else {
+        toast.error(result.error || 'Failed to update profile');
+      }
+    } catch (error) {
+      console.error('Profile save failed:', error);
+      toast.error('Failed to update profile');
+    } finally {
+      setSavingProfile(false);
     }
   }
 
@@ -96,8 +150,15 @@ export default function StudentDashboard() {
 
       {data?.student && (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <h3 className="font-semibold text-slate-900 dark:text-white">Profile</h3>
+            <button
+              type="button"
+              onClick={openProfile}
+              className="inline-flex items-center justify-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 transition-colors"
+            >
+              Edit Profile
+            </button>
           </CardHeader>
           <CardBody>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -121,6 +182,58 @@ export default function StudentDashboard() {
           </CardBody>
         </Card>
       )}
+
+      <Modal isOpen={profileOpen} onClose={() => setProfileOpen(false)} title="Edit Profile" size="md">
+        <div className="space-y-4">
+          <Input
+            label="Name"
+            value={profileForm.name}
+            onChange={(e) => setProfileForm(prev => ({ ...prev, name: e.target.value }))}
+            required
+          />
+          <Input
+            label="Email"
+            type="email"
+            value={profileForm.email}
+            onChange={(e) => setProfileForm(prev => ({ ...prev, email: e.target.value }))}
+            required
+          />
+          <Input
+            label="Password"
+            type="password"
+            value={profileForm.password}
+            onChange={(e) => setProfileForm(prev => ({ ...prev, password: e.target.value }))}
+            placeholder="Leave blank to keep current password"
+          />
+          <Input
+            label="Matric Number"
+            value={profileForm.matricNumber}
+            onChange={(e) => setProfileForm(prev => ({ ...prev, matricNumber: e.target.value }))}
+          />
+          <Input
+            label="Level"
+            value={profileForm.level}
+            onChange={(e) => setProfileForm(prev => ({ ...prev, level: e.target.value }))}
+          />
+          <div className="flex justify-end gap-3 pt-4">
+            <button
+              type="button"
+              onClick={() => setProfileOpen(false)}
+              className="rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={saveProfile}
+              disabled={savingProfile}
+              className="inline-flex items-center justify-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 transition-colors disabled:opacity-50"
+            >
+              {savingProfile ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       <Card>
         <CardHeader>

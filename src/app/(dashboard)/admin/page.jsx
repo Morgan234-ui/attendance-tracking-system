@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import StatCard from '@/components/dashboard/StatCard';
-import { AttendanceTrendChart, AttendancePieChart } from '@/components/dashboard/AttendanceChart';
+import { AttendanceTrendChart, AttendancePieChart } from '@/components/dashboard/AttandenceChart';
 import Card, { CardHeader, CardBody } from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import { Users, GraduationCap, BookOpen, Building2, AlertTriangle, Clock } from 'lucide-react';
@@ -54,9 +54,9 @@ export default function AdminDashboard() {
 
   const pieData = data?.trendData
     ? [
-        { name: 'Present', value: data.trendData.reduce((sum, d) => sum + d.present, 0) },
-        { name: 'Absent', value: data.trendData.reduce((sum, d) => sum + d.absent, 0) },
-      ]
+      { name: 'Present', value: data.trendData.reduce((sum, d) => sum + d.present, 0) },
+      { name: 'Absent', value: data.trendData.reduce((sum, d) => sum + d.absent, 0) },
+    ]
     : [];
 
   return (
