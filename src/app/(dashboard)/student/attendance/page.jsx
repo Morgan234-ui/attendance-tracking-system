@@ -13,16 +13,23 @@ import { ClipboardCheck } from 'lucide-react';
 export default function StudentAttendancePage() {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeSessions, setActiveSessions] = useState([]);
   const [filterCourse, setFilterCourse] = useState('');
   const [scanModalOpen, setScanModalOpen] = useState(false);
   const [scannerMessage, setScannerMessage] = useState('Ready to scan QR code');
-  const [scanning, setScanning] = useState(false);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
   const qrScannerRef = useRef(null);
+  const processingScanRef = useRef(false);
+  const scanCooldownUntilRef = useRef(0);
 
   useEffect(() => {
-    fetchAttendance();
+    const timer = setTimeout(fetchAttendance, filterCourse ? 400 : 0);
+    return () => clearTimeout(timer);
   }, [pagination.page, filterCourse]);
+
+  useEffect(() => {
+    fetchOpenSessions();
+  }, []);
 
   useEffect(() => {
     if (scanModalOpen) {
@@ -39,29 +46,44 @@ export default function StudentAttendancePage() {
     if (typeof window === 'undefined' || qrScannerRef.current) return;
 
     setScannerMessage('Initializing scanner...');
-    setScanning(true);
+    processingScanRef.current = false;
+    scanCooldownUntilRef.current = 0;
 
     try {
-      const { Html5Qrcode } = await import('html5-qrcode');
-      const html5QrCode = new Html5Qrcode('qr-reader');
+      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
+      const html5QrCode = new Html5Qrcode('qr-reader', {
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        verbose: false,
+      });
       qrScannerRef.current = html5QrCode;
 
       await html5QrCode.start(
         { facingMode: 'environment' },
-        { fps: 10, qrbox: 250 },
-        async (decodedText) => {
-          await handleScan(decodedText);
+        {
+          fps: 15,
+          qrbox: (viewfinderWidth, viewfinderHeight) => {
+            const size = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.8);
+            return { width: size, height: size };
+          },
+          aspectRatio: 1,
+          disableFlip: true,
         },
-        (errorMessage) => {
-          // Ignored by default; scanner is active.
+        (decodedText) => {
+          // Fires on every video frame the QR is visible — only handle it once.
+          if (processingScanRef.current || Date.now() < scanCooldownUntilRef.current) return;
+          processingScanRef.current = true;
+          handleScan(decodedText);
+        },
+        () => {
+          // No QR in frame yet; scanner keeps running.
         }
       );
 
       setScannerMessage('Scan the lecturer QR code to mark attendance.');
     } catch (error) {
       console.error(error);
-      setScannerMessage('Camera access failed. Please use a supported device.');
-      setScanning(false);
+      setScannerMessage('Camera access failed. Allow camera permission and try again.');
     }
   }
 
@@ -74,10 +96,26 @@ export default function StudentAttendancePage() {
       // ignore cleanup failures
     }
     qrScannerRef.current = null;
-    setScanning(false);
+  }
+
+  function pauseScanner() {
+    try {
+      qrScannerRef.current?.pause(true);
+    } catch {
+      // Scanner may not be in a pausable state; ignore.
+    }
+  }
+
+  function resumeScanner() {
+    try {
+      qrScannerRef.current?.resume();
+    } catch {
+      // Scanner may already be running or stopped; ignore.
+    }
   }
 
   async function handleScan(qrToken) {
+    pauseScanner();
     setScannerMessage('Processing QR code...');
     try {
       const res = await fetch('/api/attendance/qr', {
@@ -88,18 +126,32 @@ export default function StudentAttendancePage() {
       const data = await res.json();
       if (res.ok) {
         toast.success('Attendance marked successfully');
+        await stopScanner();
         setScanModalOpen(false);
         fetchAttendance();
-      } else {
-        setScannerMessage(data.error || 'Failed to mark attendance');
-        toast.error(data.error || 'Failed to mark attendance');
+        fetchOpenSessions();
+        return;
       }
+      if (res.status === 409) {
+        // Already marked — nothing left to do, so treat it as done.
+        toast.info(data.error || 'Attendance already marked for today');
+        await stopScanner();
+        setScanModalOpen(false);
+        fetchAttendance();
+        return;
+      }
+      setScannerMessage(`${data.error || 'Failed to mark attendance'}. Try scanning again.`);
+      toast.error(data.error || 'Failed to mark attendance');
+      scanCooldownUntilRef.current = Date.now() + 2500;
+      resumeScanner();
     } catch (error) {
       console.error(error);
-      setScannerMessage('Network error while scanning QR code');
+      setScannerMessage('Network error while scanning. Try again.');
       toast.error('Network error while scanning QR code');
+      scanCooldownUntilRef.current = Date.now() + 2500;
+      resumeScanner();
     } finally {
-      await stopScanner();
+      processingScanRef.current = false;
     }
   }
 
@@ -110,18 +162,38 @@ export default function StudentAttendancePage() {
         page: pagination.page.toString(),
         limit: pagination.limit.toString(),
       });
-      if (filterCourse) params.append('courseId', filterCourse);
+      if (filterCourse) params.append('courseCode', filterCourse);
 
       const res = await fetch(`/api/attendance?${params}`);
       const data = await res.json();
       if (res.ok) {
         setRecords(data.data);
-        setPagination(data.pagination);
+        if (data.pagination) {
+          setPagination(data.pagination);
+        }
+      } else {
+        toast.error(data.error || 'Failed to load attendance records');
       }
-    } catch {
+    } catch (error) {
+      console.error('Attendance fetch failed', error);
       toast.error('Failed to load attendance records');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchOpenSessions() {
+    try {
+      const res = await fetch('/api/attendance/qr');
+      const data = await res.json();
+      if (res.ok) {
+        setActiveSessions(data.data?.sessions || []);
+      } else {
+        setActiveSessions([]);
+      }
+    } catch (error) {
+      console.error('Failed to load open sessions', error);
+      setActiveSessions([]);
     }
   }
 
@@ -175,7 +247,10 @@ export default function StudentAttendancePage() {
               type="text"
               placeholder="Filter by course code..."
               value={filterCourse}
-              onChange={(e) => setFilterCourse(e.target.value)}
+              onChange={(e) => {
+                setFilterCourse(e.target.value);
+                setPagination(prev => ({ ...prev, page: 1 }));
+              }}
               className="w-full sm:w-64 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
             <button
@@ -195,6 +270,34 @@ export default function StudentAttendancePage() {
             pagination={pagination}
             onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
           />
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Open QR Attendance Sessions</h3>
+        </CardHeader>
+        <CardBody>
+          {activeSessions.length > 0 ? (
+            <div className="grid gap-4">
+              {activeSessions.map((session) => (
+                <div key={session._id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white">{session.courseId?.courseCode || 'Unknown Course'}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{session.courseId?.courseTitle || ''}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Expires at</p>
+                      <p className="text-sm font-medium text-slate-900 dark:text-white">{new Date(session.expiresAt).toLocaleTimeString()}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500 dark:text-slate-400">No open QR attendance sessions are available right now.</p>
+          )}
         </CardBody>
       </Card>
 

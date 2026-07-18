@@ -5,17 +5,43 @@ import Attendance from "@/models/Attendance";
 import Student from "@/models/Student";
 import Lecturer from "@/models/Lecturer";
 import Course from "@/models/Course";
-import { generateQRCode, verifyQRToken } from "@/lib/qr";
+import Enrollment from "@/models/Enrollment";
+import { generateQRCode } from "@/lib/qr";
 import { requireRole, handleApiError } from "@/lib/middleware";
 
 export const GET = handleApiError(async (req) => {
-  const auth = await requireRole(req, ["lecturer", "admin"]);
+  const auth = await requireRole(req, ["lecturer", "admin", "student"]);
   if (auth.error)
     return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   await connectDB();
   const { searchParams } = new URL(req.url);
   const courseId = searchParams.get("courseId");
+
+  if (auth.user.role === "student") {
+    const student = await Student.findOne({ userId: auth.user.id });
+    if (!student) {
+      return NextResponse.json(
+        { error: "Student profile not found" },
+        { status: 404 }
+      );
+    }
+
+    const enrollments = await Enrollment.find({
+      studentId: student._id,
+    }).select("courseId");
+    const courseIds = enrollments.map((e) => e.courseId);
+
+    const activeSessions = await QRSession.find({
+      courseId: { $in: courseIds },
+      isActive: true,
+      expiresAt: { $gt: new Date() },
+    })
+      .populate("courseId", "courseCode courseTitle")
+      .sort({ expiresAt: 1 });
+
+    return NextResponse.json({ data: { sessions: activeSessions } });
+  }
 
   if (!courseId) {
     return NextResponse.json(
@@ -272,14 +298,27 @@ export const PUT = handleApiError(async (req) => {
   }
 
   // Mark attendance
-  const record = await Attendance.create({
-    studentId: student._id,
-    courseId: qrSession.courseId,
-    date: today,
-    status: "present",
-    markedBy: qrSession.lecturerId,
-    verificationMethod: "qr_code",
-  });
+  let record;
+  try {
+    record = await Attendance.create({
+      studentId: student._id,
+      courseId: qrSession.courseId,
+      date: today,
+      status: "present",
+      markedBy: qrSession.lecturerId,
+      verificationMethod: "qr_code",
+    });
+  } catch (error) {
+    // Concurrent scans can both pass the findOne check; the unique index
+    // on (studentId, courseId, date) rejects the loser with code 11000.
+    if (error?.code === 11000) {
+      return NextResponse.json(
+        { error: "Attendance already marked for today" },
+        { status: 409 }
+      );
+    }
+    throw error;
+  }
 
   return NextResponse.json({ data: record }, { status: 201 });
 });

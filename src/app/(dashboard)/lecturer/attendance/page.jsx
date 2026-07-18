@@ -48,8 +48,8 @@ export default function LecturerAttendancePage() {
     }
   }, [selectedCourse]);
 
-  async function fetchActiveSession(courseId) {
-    setLoading(true);
+  async function fetchActiveSession(courseId, { silent = false } = {}) {
+    if (!silent) setLoading(true);
     try {
       const res = await fetch(`/api/attendance/qr?courseId=${courseId}`);
       const data = await res.json();
@@ -66,12 +66,14 @@ export default function LecturerAttendancePage() {
         setScannedRecords([]);
       }
     } catch {
-      setActiveSession(null);
-      setQrData(null);
-      setQrCountdown(null);
-      setScannedRecords([]);
+      if (!silent) {
+        setActiveSession(null);
+        setQrData(null);
+        setQrCountdown(null);
+        setScannedRecords([]);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 
@@ -81,12 +83,11 @@ export default function LecturerAttendancePage() {
       return toast.error('You already have an open session. Close it before opening another.');
     }
     setGeneratingQR(true);
-    console.log('generateQR start', { selectedCourse, expiresInMinutes });
     try {
       const res = await fetch('/api/attendance/qr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ courseId: selectedCourse, expiresInMinutes }),
+        body: JSON.stringify({ courseId: selectedCourse, expiresInMinutes: expiresMinutes }),
       });
 
       const text = await res.text();
@@ -96,8 +97,6 @@ export default function LecturerAttendancePage() {
       } catch (parseError) {
         console.error('Failed to parse response JSON', parseError, text);
       }
-
-      console.log('generateQR response', res.status, data);
 
       if (!res.ok) {
         const errorMessage = data?.error || text || 'Failed to generate QR code';
@@ -155,21 +154,41 @@ export default function LecturerAttendancePage() {
     { key: 'date', label: 'Scanned At', render: (val) => new Date(val).toLocaleTimeString() },
   ];
 
+  // Tick the countdown from expiresAt (drift-free) whenever a session is active,
+  // and clear everything out once it expires.
   useEffect(() => {
-    if (!qrModalOpen || qrCountdown === null) return undefined;
+    if (!activeSession?.expiresAt) return undefined;
 
-    const interval = setInterval(() => {
-      setQrCountdown((current) => {
-        if (current === null || current <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return current - 1;
-      });
-    }, 1000);
+    const expiresAt = new Date(activeSession.expiresAt).getTime();
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+      setQrCountdown(remaining);
+      if (remaining <= 0) {
+        clearInterval(interval);
+        toast.info('QR session expired');
+        setActiveSession(null);
+        setQrData(null);
+        setQrCountdown(null);
+        setQrModalOpen(false);
+      }
+    };
+    const interval = setInterval(tick, 1000);
+    tick();
 
     return () => clearInterval(interval);
-  }, [qrModalOpen, qrCountdown]);
+  }, [activeSession?.expiresAt]);
+
+  // Refresh the scanned-students list while a session is open so new scans
+  // appear without reselecting the course.
+  useEffect(() => {
+    if (!activeSession?._id || !selectedCourse) return undefined;
+
+    const interval = setInterval(() => {
+      fetchActiveSession(selectedCourse, { silent: true });
+    }, 8000);
+
+    return () => clearInterval(interval);
+  }, [activeSession?._id, selectedCourse]);
 
   return (
     <div className="space-y-6 fade-in">
