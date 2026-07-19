@@ -163,9 +163,14 @@ export default function LoginPage() {
             </form>
 
             <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
-              <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
-                Demo credentials: admin@university.edu / password123
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 text-center mb-2">
+                Demo credentials (password: password123)
               </p>
+              <div className="text-xs text-slate-500 dark:text-slate-400 text-center space-y-1">
+                <p>Admin: admin@university.edu</p>
+                <p>Lecturer: sarah.johnson@university.edu</p>
+                <p>Student: student1@university.edu</p>
+              </div>
             </div>
           </div>
         </div>
