@@ -8,7 +8,8 @@ import Input, { Select } from '@/components/ui/Input';
 import Table from '@/components/ui/Table';
 import Modal from '@/components/ui/Modal';
 import Badge from '@/components/ui/Badge';
-import { Plus, Search, Edit2, Trash2, BookOpen } from 'lucide-react';
+import EnrolledStudentsModal from '@/components/EnrolledStudentsModal';
+import { Plus, Search, Edit2, Trash2, BookOpen, Users } from 'lucide-react';
 
 export default function CoursesPage() {
   const [courses, setCourses] = useState([]);
@@ -23,6 +24,7 @@ export default function CoursesPage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
+  const [viewCourse, setViewCourse] = useState(null);
 
   const fetchCourses = useCallback(async () => {
     setLoading(true);
@@ -142,6 +144,9 @@ export default function CoursesPage() {
       label: 'Actions',
       render: (_, row) => (
         <div className="flex items-center gap-2">
+          <button onClick={() => setViewCourse(row)} title="View enrolled students" className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+            <Users className="h-4 w-4 text-slate-500 dark:text-slate-300" />
+          </button>
           <button onClick={() => openEdit(row)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
             <Edit2 className="h-4 w-4 text-primary-600" />
           </button>
@@ -266,6 +271,12 @@ export default function CoursesPage() {
           </div>
         </form>
       </Modal>
+
+      <EnrolledStudentsModal
+        course={viewCourse}
+        isOpen={!!viewCourse}
+        onClose={() => setViewCourse(null)}
+      />
     </div>
   );
 }

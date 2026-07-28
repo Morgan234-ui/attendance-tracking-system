@@ -4,11 +4,14 @@ import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import Card, { CardBody } from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
-import { BookOpen } from 'lucide-react';
+import Button from '@/components/ui/Button';
+import EnrolledStudentsModal from '@/components/EnrolledStudentsModal';
+import { BookOpen, Users } from 'lucide-react';
 
 export default function LecturerCoursesPage() {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [viewCourse, setViewCourse] = useState(null);
 
   useEffect(() => {
     async function fetchCourses() {
@@ -52,12 +55,17 @@ export default function LecturerCoursesPage() {
                 <div className="flex-1">
                   <h3 className="font-semibold text-slate-900 dark:text-white">{course.courseCode}</h3>
                   <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{course.courseTitle}</p>
-                  <div className="flex items-center gap-2 mt-3">
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
                     <Badge variant="info">{course.unit} Units</Badge>
                     <Badge variant="info" className="capitalize">{course.semester}</Badge>
                     {course.departmentId && (
                       <Badge variant="info">{course.departmentId.code || course.departmentId.name}</Badge>
                     )}
+                  </div>
+                  <div className="mt-4">
+                    <Button size="sm" variant="outline" icon={Users} onClick={() => setViewCourse(course)}>
+                      View Students
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -65,6 +73,12 @@ export default function LecturerCoursesPage() {
           </Card>
         ))}
       </div>
+
+      <EnrolledStudentsModal
+        course={viewCourse}
+        isOpen={!!viewCourse}
+        onClose={() => setViewCourse(null)}
+      />
     </div>
   );
 }
